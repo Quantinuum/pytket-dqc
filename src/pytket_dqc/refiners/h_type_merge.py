@@ -44,6 +44,16 @@ class EagerHTypeMerge(Refiner):
         refinement_made = False
         pacman = PacMan(distribution.circuit, distribution.placement)
         hyp_circ = distribution.circuit
+        # Gates that a hyperedge of the current distribution already H-embeds,
+        # with that hyperedge's qubit vertex. Merges from earlier calls (for
+        # instance earlier rounds of RepeatRefiner) are not in
+        # `already_done_hoppings`, so they are checked through this map.
+        embedded_by = {
+            gate: hyp_circ.get_qubit_vertex(hedge)
+            for hedge in hyp_circ.hyperedge_list
+            if hyp_circ.get_gate_vertices(hedge)
+            for gate in hyp_circ.get_h_embedded_gate_vertices(hedge)
+        }
 
         already_done_hoppings: list[HoppingPacket] = list()
         all_hedges_to_merge: list[set[Hyperedge]] = list()
@@ -80,16 +90,31 @@ class EagerHTypeMerge(Refiner):
                         # We only merge embeddings when there are no conflicts
                         # that have already been merged previously and none of
                         # the embedded gates are detached
-                        if all(  # No conflicts
-                            conflict not in already_done_hoppings
-                            for conflict in pacman.get_conflict_hoppings(hopping_packet)
-                        ) and all(  # No detached gates
-                            gate not in detached_gate_list
-                            for gate in hyp_circ.get_h_embedded_gate_vertices(
-                                Hyperedge(
-                                    [qubit_vertex]
-                                    + current_packet.gate_vertices
-                                    + next_hopper.gate_vertices
+                        if (
+                            all(  # No conflicts
+                                conflict not in already_done_hoppings
+                                for conflict in pacman.get_conflict_hoppings(
+                                    hopping_packet
+                                )
+                            )
+                            and all(  # No conflicts with earlier merges
+                                embedded_by.get(gate, qubit_vertex) == qubit_vertex
+                                for gate in hyp_circ.get_h_embedded_gate_vertices(
+                                    Hyperedge(
+                                        [qubit_vertex]
+                                        + current_packet.gate_vertices
+                                        + next_hopper.gate_vertices
+                                    )
+                                )
+                            )
+                            and all(  # No detached gates
+                                gate not in detached_gate_list
+                                for gate in hyp_circ.get_h_embedded_gate_vertices(
+                                    Hyperedge(
+                                        [qubit_vertex]
+                                        + current_packet.gate_vertices
+                                        + next_hopper.gate_vertices
+                                    )
                                 )
                             )
                         ):
