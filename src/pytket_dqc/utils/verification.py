@@ -18,6 +18,7 @@ from pytket.passes import AutoRebase
 from pytket.extensions.pyzx import tk_to_pyzx
 import pyzx as zx
 from .gateset import is_start_proc, is_end_proc
+import numpy as np
 
 
 def check_equivalence(
@@ -75,8 +76,13 @@ def check_equivalence(
     # input and output per wire.
     # To make sure that g has no swaps, we check that the input and
     # output vertices are connected in the right order
-    return g.num_vertices() == 2 * len(g.inputs()) and all(
-        g.connected(v, w) for v, w in zip(g.inputs(), g.outputs())
+    # The scalar must have modulus 1: projecting the link qubits onto 0 then
+    # keeps all of the weight, so each link qubit is a copy of its original
+    # qubit when its ending process acts and the projections to 1 vanish.
+    return (
+        g.num_vertices() == 2 * len(g.inputs())
+        and all(g.connected(v, w) for v, w in zip(g.inputs(), g.outputs()))
+        and bool(np.isclose(abs(g.scalar.to_number()), 1))
     )
 
 
